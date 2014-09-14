@@ -30,7 +30,25 @@ int main(){
 		}
 		avg.push_back((left + right) / 2);
 	}*/
-	FIBITMAP *dib = FreeImage_Load(FIF_BMP, "asdf.bmp", BMP_DEFAULT);
+	FIBITMAP *dib = FreeImage_Load(FIF_BMP, "asdf.png", BMP_DEFAULT);
+	// Calculate the number of bytes per pixel (3 for 24-bit or 4 for 32-bit)
+	cout << "adsf" << endl;
+	int bytespp = FreeImage_GetLine(dib) / 25362;
+	cout << "adsf" << endl;
+	cout << FreeImage_GetHeight(dib) << " " << 25362 << " " << bytespp << endl;
+	for (unsigned y = 0; y < FreeImage_GetHeight(dib); y++) {
+		BYTE *bits = FreeImage_GetScanLine(dib, y);
+		for (unsigned x = 0; x < 25362; x++) {
+			// Set pixel color to green with a transparency of 128
+			/*bits[FI_RGBA_RED] = 0;
+			bits[FI_RGBA_GREEN] = 255;
+			bits[FI_RGBA_BLUE] = 0;
+			bits[FI_RGBA_ALPHA] = 128;
+			// jump to next pixel
+			bits += bytespp;*/
+		}
+	}
+
 	FreeImage_Unload(dib);
 	return 0;
 }

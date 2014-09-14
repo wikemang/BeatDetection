@@ -9,7 +9,7 @@ using namespace std;
 #pragma comment(lib, "strmiids.lib") 
 
 // Obviously change this to point to a valid mp3 file.
-const wchar_t* filePath = L"../../../noise.mp3";
+const wchar_t* filePath = L"../../../sistar.wav";
 
 int main()
 {
@@ -38,11 +38,12 @@ int main()
 	hr = pGraph->QueryInterface(IID_IMediaEvent, (void **)&pEvent);
 
 	// Build the graph.
-	cout << "start?" << endl;
+	cout << "start???" << endl;
 	hr = pGraph->RenderFile(filePath, NULL);
 	if (SUCCEEDED(hr))
 	{
 		// Run the graph.
+		cout << "step2" << endl;
 		hr = pControl->Run();
 		if (SUCCEEDED(hr))
 		{

@@ -1,3 +1,5 @@
 *.dll
+!FreeImage.dll
 *.exe
 *.opensdf
+*.sdf

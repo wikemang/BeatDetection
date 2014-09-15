@@ -34,9 +34,6 @@
     <ClInclude Include="rtAudio\include\RtError.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="CImg.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
     <ClInclude Include="FreeImage.h">
       <Filter>Source Files</Filter>
     </ClInclude>

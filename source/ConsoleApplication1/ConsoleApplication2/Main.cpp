@@ -5,10 +5,13 @@
 #include <windows.h>
 #include "FreeImage.h"
 #include <time.h>
+#include "PlayFile.h"
+#include <thread> 
 
 using namespace std;
 
 const int compression = 64;
+const int playAtMarker = 200;
 RGBQUAD blue;
 RGBQUAD black;
 RGBQUAD red;
@@ -100,7 +103,7 @@ void drawWave(FIBITMAP *dib, int dot[100000], int width, int height){
 		}
 	}
 
-	for (unsigned x = 200; x < 204; x++) {
+	for (unsigned x = playAtMarker; x < playAtMarker + 4; x++) {
 		for (unsigned y = 0; y < height; y++) {
 			FreeImage_SetPixelColor(dib, x, y, &red);
 		}
@@ -178,17 +181,20 @@ int main(){
 			break;
 	}
 	clock_t  clock1, clock2;
+	thread first(playFile);
+	Sleep(400);
 	for (int jk = 0; jk < 10000; jk++){
 		clock1 = clock();
-		dot+= compression * 7;
+		dot+= compression * 69;
 		drawWave(dib, dot, width, height);
 		StretchDIBits(hDC, rcDest.left, rcDest.top,
 			rcDest.right - rcDest.left, rcDest.bottom - rcDest.top,
 			0, 0, FreeImage_GetWidth(dib), FreeImage_GetHeight(dib),
 			FreeImage_GetBits(dib), FreeImage_GetInfo(dib), DIB_RGB_COLORS, SRCCOPY);
 		clock2 = clock();
-		float diff = (((float)clock2 - (float)clock1) / 1000000.0F) * 1000;
-		//Sleep(10 - diff);
+		float diff = (((float)clock2 - (float)clock1) / 1000000.0F) * 1000000;
+		Sleep(100 - diff);
+		cout << jk << endl;
 	}
 	//fillcurve(dot);
 	cout << countzeros(dot) << endl;

@@ -91,6 +91,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="FreeImage.h" />
+    <ClInclude Include="PlayFile.h" />
     <ClInclude Include="rtAudio\include\RtAudio.h" />
     <ClInclude Include="rtAudio\include\RtError.h" />
   </ItemGroup>

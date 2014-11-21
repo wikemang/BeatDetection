@@ -8,6 +8,9 @@
 #include "PlayFile.h"
 #include <thread> 
 
+#include <dshow.h>
+#include <cstdio>
+
 using namespace std;
 
 const int compression = 64;
@@ -31,11 +34,6 @@ void initColors(){
 	red.rgbGreen = 80;
 	red.rgbRed = 200;
 	red.rgbReserved = 125;
-}
-
-short getnum(char lsb, char msb){
-	short num = (msb << 8) | lsb;
-	return num;
 }
 
 void fillcurve(int dots[1000]){
@@ -68,9 +66,9 @@ void drawCurve(FIBITMAP *dib, int dot[1000], int width, int height){
 			FreeImage_SetPixelColor(dib, x, y, &blue);
 			if (y == dot[x] && dot[x] != 0){
 				FreeImage_SetPixelColor(dib, x, y, &black);
-				FreeImage_SetPixelColor(dib, x-1, y, &black);
-				FreeImage_SetPixelColor(dib, x, y-1, &black);
-				FreeImage_SetPixelColor(dib, x-1, y-1, &black);
+				FreeImage_SetPixelColor(dib, x - 1, y, &black);
+				FreeImage_SetPixelColor(dib, x, y - 1, &black);
+				FreeImage_SetPixelColor(dib, x - 1, y - 1, &black);
 			}
 		}
 	}
@@ -110,7 +108,6 @@ void drawWave(FIBITMAP *dib, int dot[100000], int width, int height){
 	}
 }
 
-
 int countzeros(int dots[1000]){
 	int count = 0;
 	for (int i = 0; i < 1000; i++)
@@ -119,10 +116,48 @@ int countzeros(int dots[1000]){
 	return count;
 }
 
+short getnum(char lsb, char msb){
+	short num = (msb << 8) | lsb;
+	return num;
+}
+
+
+// For IID_IGraphBuilder, IID_IMediaControl, IID_IMediaEvent
+#pragma comment(lib, "strmiids.lib")
+// Obviously change this to point to a valid mp3 file.
+const wchar_t* filePath = L"../../../sistar.wav";
+
 int main(){
+	/*Sound stuff*/
+	IGraphBuilder *pGraph = NULL;
+	IMediaControl *pControl = NULL;
+	IMediaEvent   *pEvent = NULL;
+
+	// Initialize the COM library.
+	HRESULT hr = ::CoInitialize(NULL);
+	if (FAILED(hr))
+	{
+		::printf("ERROR - Could not initialize COM library");
+		return 0;
+	}
+
+	// Create the filter graph manager and query for interfaces.
+	hr = ::CoCreateInstance(CLSID_FilterGraph, NULL, CLSCTX_INPROC_SERVER,
+		IID_IGraphBuilder, (void **)&pGraph);
+	if (FAILED(hr))
+	{
+		::printf("ERROR - Could not create the Filter Graph Manager.");
+		return 0;
+	}
+
+	hr = pGraph->QueryInterface(IID_IMediaControl, (void **)&pControl);
+	hr = pGraph->QueryInterface(IID_IMediaEvent, (void **)&pEvent);
+
+
+
+
 	initColors();
 	ifstream wavfile("../../../sistar.wav", ios::binary);
-	int i = 0;
 	char buffer[4];
 	for (int j = 0; j < 22; j++){	//Wav header
 		wavfile.read(buffer, 2);
@@ -140,23 +175,9 @@ int main(){
 	rcDest.bottom = 640;
 
 	SetStretchBltMode(hDC, COLORONCOLOR);
-	/*
-	// Calculate the number of bytes per pixel (3 for 24-bit or 4 for 32-bit)
-	int bytespp = FreeImage_GetLine(dib) / FreeImage_GetWidth(dib);
-	for (unsigned y = 0; y < height; y++) {
-		BYTE *bits = FreeImage_GetScanLine(dib, y);
-		for (unsigned x = 0; x < width; x++) {
-			// Set pixel color to green with a transparency of 128
-			bits[FI_RGBA_RED] = 0;
-			bits[FI_RGBA_GREEN] = 255;
-			bits[FI_RGBA_BLUE] = 0;
-			bits[FI_RGBA_ALPHA] = 128;
-			// jump to next pixel
-			bits += bytespp;
-		}
-	}*/
 
 
+	int i = 0;
 	while (wavfile.read(buffer, 4)){	//Skip buffer to...
 		break;
 		i++;
@@ -181,34 +202,50 @@ int main(){
 			break;
 	}
 	clock_t  clock1, clock2;
-	thread first(playFile);
-	Sleep(400);
-	for (int jk = 0; jk < 10000; jk++){
-		clock1 = clock();
-		dot+= compression * 69;
-		drawWave(dib, dot, width, height);
-		StretchDIBits(hDC, rcDest.left, rcDest.top,
-			rcDest.right - rcDest.left, rcDest.bottom - rcDest.top,
-			0, 0, FreeImage_GetWidth(dib), FreeImage_GetHeight(dib),
-			FreeImage_GetBits(dib), FreeImage_GetInfo(dib), DIB_RGB_COLORS, SRCCOPY);
-		clock2 = clock();
-		float diff = (((float)clock2 - (float)clock1) / 1000000.0F) * 1000000;
-		Sleep(100 - diff);
-		cout << jk << endl;
-	}
-	//fillcurve(dot);
-	cout << countzeros(dot) << endl;
+	//thread first(playFile);
+	// Build the graph.
+	cout << "start???" << endl;
+	hr = pGraph->RenderFile(filePath, NULL);
+	if (SUCCEEDED(hr))
+	{
+		// Run the graph.
+		cout << "step2" << endl;
+		hr = pControl->Run();
+		if (SUCCEEDED(hr))
+		{
+			// Wait for completion.
+			while (true){
+				clock1 = clock();
+				cout << "-";
+				long evCode;
 
+				dot += compression * 69;
+				drawWave(dib, dot, width, height);
+				StretchDIBits(hDC, rcDest.left, rcDest.top,
+					rcDest.right - rcDest.left, rcDest.bottom - rcDest.top,
+					0, 0, FreeImage_GetWidth(dib), FreeImage_GetHeight(dib),
+					FreeImage_GetBits(dib), FreeImage_GetInfo(dib), DIB_RGB_COLORS, SRCCOPY);
+				clock2 = clock();
 
-	/*
-	for (unsigned x = 0; x < width; x++) {
-		for (unsigned y = 0; y < height; y++) {
-			FreeImage_SetPixelColor(dib, x, y, &blue);
-			if (y == dot[x] && dot[x] != 0)
-				FreeImage_SetPixelColor(dib, x, y, &black);
+				int diff = int((float)clock2 - (float)clock1);
+				//cout << diff << endl;
+				HRESULT asdf = pEvent->WaitForCompletion(100 - diff - 8, &evCode);
+				if (asdf == VFW_E_WRONG_STATE)
+					break;
+			}
+			cout << "end??" << endl;
+
+			// Note: Do not use INFINITE in a real application, because it
+			// can block indefinitely.
 		}
-	}*/
+	}
 
+
+	// Clean up in reverse order.
+	pEvent->Release();
+	pControl->Release();
+	pGraph->Release();
+	::CoUninitialize();
 
 	delete(dot);
 	FreeImage_Unload(dib);

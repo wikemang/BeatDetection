@@ -214,10 +214,11 @@ int main(){
 		if (SUCCEEDED(hr))
 		{
 			// Wait for completion.
+			long evCode;
+			HRESULT asdf = pEvent->WaitForCompletion(550, &evCode);
+			clock1 = clock();
 			while (true){
-				clock1 = clock();
 				cout << "-";
-				long evCode;
 
 				dot += compression * 69;
 				drawWave(dib, dot, width, height);
@@ -228,12 +229,13 @@ int main(){
 				clock2 = clock();
 
 				int diff = int((float)clock2 - (float)clock1);
+				clock1 = clock();
 				//cout << diff << endl;
-				HRESULT asdf = pEvent->WaitForCompletion(100 - diff - 8, &evCode);
+				HRESULT asdf = pEvent->WaitForCompletion(101 - diff, &evCode);
 				if (asdf == VFW_E_WRONG_STATE)
 					break;
 			}
-			cout << "end??" << endl;
+			cout << "end???" << endl;
 
 			// Note: Do not use INFINITE in a real application, because it
 			// can block indefinitely.

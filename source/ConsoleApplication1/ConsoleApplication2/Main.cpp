@@ -201,7 +201,7 @@ int main(){
 		if (i == 1000000)
 			break;
 	}
-	clock_t  clock1, clock2;
+	DWORD timer1, timer2;
 	//thread first(playFile);
 	// Build the graph.
 	cout << "start???" << endl;
@@ -215,22 +215,22 @@ int main(){
 		{
 			// Wait for completion.
 			long evCode;
-			HRESULT asdf = pEvent->WaitForCompletion(550, &evCode);
-			clock1 = clock();
+			HRESULT asdf = pEvent->WaitForCompletion(450, &evCode);
+			timer1 = GetTickCount();
 			while (true){
-				cout << "-";
+				//cout << "-";
 
-				dot += compression * 69;
+				dot += compression * 69;	//Frequency: 44100
 				drawWave(dib, dot, width, height);
 				StretchDIBits(hDC, rcDest.left, rcDest.top,
 					rcDest.right - rcDest.left, rcDest.bottom - rcDest.top,
 					0, 0, FreeImage_GetWidth(dib), FreeImage_GetHeight(dib),
 					FreeImage_GetBits(dib), FreeImage_GetInfo(dib), DIB_RGB_COLORS, SRCCOPY);
-				clock2 = clock();
+				timer2 = GetTickCount();
 
-				int diff = int((float)clock2 - (float)clock1);
-				clock1 = clock();
-				//cout << diff << endl;
+				DWORD diff = timer2 - timer1;
+				timer1 = GetTickCount();
+				cout << CLOCKS_PER_SEC << endl;
 				HRESULT asdf = pEvent->WaitForCompletion(101 - diff, &evCode);
 				if (asdf == VFW_E_WRONG_STATE)
 					break;

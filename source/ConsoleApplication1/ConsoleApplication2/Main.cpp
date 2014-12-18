@@ -13,11 +13,14 @@
 
 using namespace std;
 
-const int compression = 64;
+const int COMPRESSION = 64;
 const int playAtMarker = 200;
+const int DEFAULTHIGH = -300;
+const int DEFAULTLOW = 700;
 RGBQUAD blue;
 RGBQUAD black;
 RGBQUAD red;
+RGBQUAD yellow;
 
 void initColors(){
 	blue.rgbBlue = 255;
@@ -33,6 +36,11 @@ void initColors(){
 	red.rgbBlue = 80;
 	red.rgbGreen = 80;
 	red.rgbRed = 200;
+	red.rgbReserved = 125;
+
+	yellow.rgbBlue = 180;
+	yellow.rgbGreen = 180;
+	yellow.rgbRed = 0;
 	red.rgbReserved = 125;
 }
 
@@ -75,28 +83,20 @@ void drawCurve(FIBITMAP *dib, int dot[1000], int width, int height){
 }
 
 
-void drawWave(FIBITMAP *dib, int dot[100000], int width, int height){
-	int i = 0;
-	int lowest, highest;
+void drawWave(FIBITMAP *dib, int high[COMPRESSION], int low[COMPRESSION], int width, int height, bool highlight[COMPRESSION]){
 	for (unsigned x = 0; x < width; x++) {
-		i += compression;
-		lowest = 700;
-		highest = -300;
-		for (int j = 0; j < compression; j++){
-			if (dot[i + j] != 0){
-				if (dot[i + j] <= lowest)
-					lowest = dot[i + j];
-				if (dot[i + j] >= highest)
-					highest = dot[i + j];
-			}
-		}
-
 		for (unsigned y = 0; y < height; y++) {
 			FreeImage_SetPixelColor(dib, x, y, &blue);
 		}
-		if (lowest != 700 && highest != -300){
-			for (unsigned y = lowest; y < highest; y++) {
+		if (low[x] != DEFAULTLOW && high[x] != DEFAULTHIGH){
+			for (unsigned y = low[x]; y < high[x]; y++) {
 				FreeImage_SetPixelColor(dib, x, y, &black);
+			}
+		}
+		if (highlight[x]){
+			for (unsigned y = 250; y < 350; y++) {
+				FreeImage_SetPixelColor(dib, x, y, &yellow);
+				FreeImage_SetPixelColor(dib, x - 1, y, &yellow);
 			}
 		}
 	}
@@ -106,6 +106,23 @@ void drawWave(FIBITMAP *dib, int dot[100000], int width, int height){
 			FreeImage_SetPixelColor(dib, x, y, &red);
 		}
 	}
+}
+
+void initHiLo(int dot[COMPRESSION], int height, int* high, int* low){
+	int lowest, highest;
+	lowest = DEFAULTLOW;
+	highest = DEFAULTHIGH;
+	for (int j = 0; j < COMPRESSION; j++){
+		if (dot[j] != 0){
+			if (dot[j] <= lowest)
+				lowest = dot[j];
+			if (dot[j] >= highest)
+				highest = dot[j];
+		}
+	}
+	*high = highest;
+	*low = lowest;
+
 }
 
 int countzeros(int dots[1000]){
@@ -216,11 +233,16 @@ int main(){
 	}
 
 	int* dot = new int[12000000];
+	int* origdot = dot;
 	for (int i = 0; i < 12000000; i++){
 		dot[i] = 0;
 	}
 	int* highdot = new int[100000];
 	int* lowdot = new int[100000];
+	bool* highlight = new bool[100000];
+	int* orighigh = highdot;
+	int* origlow = lowdot;
+	bool* orighighlight = highlight;
 	i = 0;
 	while (wavfile.read(buffer, 4)){
 		dot[i] = (getnum(buffer[0], buffer[1]) + 32767) * 640 / 65536;
@@ -231,6 +253,17 @@ int main(){
 		//if (i == 10000000)
 		//	break;
 	}
+	cout << "here" << endl;
+	for (int i = 0; i < 90000; i++){
+		initHiLo(dot, height, &highdot[i], &lowdot[i]);
+		dot += COMPRESSION;
+	}
+	highlight[2000] = true;
+	highlight[2050] = true;
+	cout << "here" << endl;
+	dot = origdot;
+	highdot = orighigh;
+	lowdot = origlow;
 	time_t timer1, timer2;
 	thread first(playFile);
 	Sleep(250);
@@ -240,8 +273,12 @@ int main(){
 	while (true){
 		//cout << "-";
 
-		dot += compression * 50;	//Frequency: 44100
-		drawWave(dib, dot, width, height);
+		dot += COMPRESSION * 50;	//Frequency: 44100
+		highdot += 50;
+		lowdot += 50;
+		highlight += 50;
+
+		drawWave(dib, highdot, lowdot, width, height, highlight);
 		StretchDIBits(hDC, rcDest.left, rcDest.top,
 			rcDest.right - rcDest.left, rcDest.bottom - rcDest.top,
 			0, 0, FreeImage_GetWidth(dib), FreeImage_GetHeight(dib),
@@ -256,7 +293,10 @@ int main(){
 	cout << "end???" << endl;
 
 
-	delete(dot);
+	delete(origdot);
+	delete(orighigh);
+	delete(origlow);
+	delete(orighighlight);
 	FreeImage_Unload(dib);
 
 	return 0;

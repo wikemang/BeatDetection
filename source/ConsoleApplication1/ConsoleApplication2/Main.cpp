@@ -127,7 +127,7 @@ short getnum(char lsb, char msb){
 // Obviously change this to point to a valid mp3 file.
 const wchar_t* filePath = L"../../../sistar.wav";
 
-int main(){
+void playFile(){
 	/*Sound stuff*/
 	IGraphBuilder *pGraph = NULL;
 	IMediaControl *pControl = NULL;
@@ -138,7 +138,7 @@ int main(){
 	if (FAILED(hr))
 	{
 		::printf("ERROR - Could not initialize COM library");
-		return 0;
+		return;
 	}
 
 	// Create the filter graph manager and query for interfaces.
@@ -147,15 +147,43 @@ int main(){
 	if (FAILED(hr))
 	{
 		::printf("ERROR - Could not create the Filter Graph Manager.");
-		return 0;
+		return;
 	}
 
 	hr = pGraph->QueryInterface(IID_IMediaControl, (void **)&pControl);
 	hr = pGraph->QueryInterface(IID_IMediaEvent, (void **)&pEvent);
 
+	hr = pGraph->RenderFile(filePath, NULL);
+	if (SUCCEEDED(hr))
+	{
+		// Run the graph.
+		cout << "step2" << endl;
+		hr = pControl->Run();
+		if (SUCCEEDED(hr))
+		{
+			// Wait for completion.
+			long evCode;
+			while (true){
+				HRESULT asdf = pEvent->WaitForCompletion(101, &evCode);
+				if (asdf == VFW_E_WRONG_STATE)
+					break;
+			}
+			cout << "end???" << endl;
+
+			// Note: Do not use INFINITE in a real application, because it
+			// can block indefinitely.
+		}
+	}
 
 
+	// Clean up in reverse order.
+	pEvent->Release();
+	pControl->Release();
+	pGraph->Release();
+	::CoUninitialize();
+}
 
+int main(){
 	initColors();
 	ifstream wavfile("../../../sistar.wav", ios::binary);
 	char buffer[4];
@@ -187,10 +215,12 @@ int main(){
 		}
 	}
 
-	int* dot = new int[1200000];
-	for (int i = 0; i < 1200000; i++){
+	int* dot = new int[12000000];
+	for (int i = 0; i < 12000000; i++){
 		dot[i] = 0;
 	}
+	int* highdot = new int[100000];
+	int* lowdot = new int[100000];
 	i = 0;
 	while (wavfile.read(buffer, 4)){
 		dot[i] = (getnum(buffer[0], buffer[1]) + 32767) * 640 / 65536;
@@ -198,56 +228,33 @@ int main(){
 			dot[i] = 0;
 		}
 		i++;
-		if (i == 1000000)
-			break;
+		//if (i == 10000000)
+		//	break;
 	}
-	DWORD timer1, timer2;
-	//thread first(playFile);
+	time_t timer1, timer2;
+	thread first(playFile);
+	Sleep(250);
 	// Build the graph.
 	cout << "start???" << endl;
-	hr = pGraph->RenderFile(filePath, NULL);
-	if (SUCCEEDED(hr))
-	{
-		// Run the graph.
-		cout << "step2" << endl;
-		hr = pControl->Run();
-		if (SUCCEEDED(hr))
-		{
-			// Wait for completion.
-			long evCode;
-			HRESULT asdf = pEvent->WaitForCompletion(450, &evCode);
-			timer1 = GetTickCount();
-			while (true){
-				//cout << "-";
+	timer1 = clock();
+	while (true){
+		//cout << "-";
 
-				dot += compression * 69;	//Frequency: 44100
-				drawWave(dib, dot, width, height);
-				StretchDIBits(hDC, rcDest.left, rcDest.top,
-					rcDest.right - rcDest.left, rcDest.bottom - rcDest.top,
-					0, 0, FreeImage_GetWidth(dib), FreeImage_GetHeight(dib),
-					FreeImage_GetBits(dib), FreeImage_GetInfo(dib), DIB_RGB_COLORS, SRCCOPY);
-				timer2 = GetTickCount();
+		dot += compression * 50;	//Frequency: 44100
+		drawWave(dib, dot, width, height);
+		StretchDIBits(hDC, rcDest.left, rcDest.top,
+			rcDest.right - rcDest.left, rcDest.bottom - rcDest.top,
+			0, 0, FreeImage_GetWidth(dib), FreeImage_GetHeight(dib),
+			FreeImage_GetBits(dib), FreeImage_GetInfo(dib), DIB_RGB_COLORS, SRCCOPY);
+		timer2 = clock();
 
-				DWORD diff = timer2 - timer1;
-				timer1 = GetTickCount();
-				cout << CLOCKS_PER_SEC << endl;
-				HRESULT asdf = pEvent->WaitForCompletion(101 - diff, &evCode);
-				if (asdf == VFW_E_WRONG_STATE)
-					break;
-			}
-			cout << "end???" << endl;
-
-			// Note: Do not use INFINITE in a real application, because it
-			// can block indefinitely.
-		}
+		time_t diff = timer2 - timer1;
+		cout << diff << endl;
+		Sleep(73 - diff);
+		timer1 = clock();
 	}
+	cout << "end???" << endl;
 
-
-	// Clean up in reverse order.
-	pEvent->Release();
-	pControl->Release();
-	pGraph->Release();
-	::CoUninitialize();
 
 	delete(dot);
 	FreeImage_Unload(dib);

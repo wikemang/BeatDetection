@@ -93,10 +93,9 @@ void drawWave(FIBITMAP *dib, int high[COMPRESSION], int low[COMPRESSION], int wi
 				FreeImage_SetPixelColor(dib, x, y, &black);
 			}
 		}
-		if (highlight[x]){
+		if (highlight[x] || highlight[x - 1] || highlight[x - 2]){
 			for (unsigned y = 250; y < 350; y++) {
 				FreeImage_SetPixelColor(dib, x, y, &yellow);
-				FreeImage_SetPixelColor(dib, x - 1, y, &yellow);
 			}
 		}
 	}

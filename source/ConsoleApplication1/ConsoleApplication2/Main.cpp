@@ -6,6 +6,7 @@
 #include <time.h>
 #include <thread> 
 #include "constants.h"
+#include "SimpleBeatDetection.h"
 
 #include <dshow.h>
 #include <cstdio>
@@ -48,7 +49,7 @@ void drawWave(FIBITMAP *dib, int high[COMPRESSION], int low[COMPRESSION], int wi
 		}
 		if (highlight[x] || highlight[x - 1] || highlight[x - 2]){
 			for (unsigned y = 250; y < 350; y++) {
-				//FreeImage_SetPixelColor(dib, x, y, &yellow);
+				FreeImage_SetPixelColor(dib, x, y, &yellow);
 			}
 		}
 	}
@@ -75,17 +76,6 @@ void initHiLo(int dot[COMPRESSION], int height, int* high, int* low){
 	*high = highest;
 	*low = lowest;
 }
-
-void detectBeat(int prevAvg[20], bool* highlight, int* high, int* low){
-	for (int i = 19; i > 0; i--){
-		prevAvg[i] = prevAvg[i - 1];
-	}
-	prevAvg[0] = (prevAvg[1] * 20 - pow(*(high - 19), 2) + pow(*high, 2)) / 20;
-	if (prevAvg[0] > prevAvg[1] && !(prevAvg[1] > prevAvg[2])){
-		*highlight = true;
-	}
-}
-
 //Get numerical value of .wav word
 short getnum(char lsb, char msb){
 	short num = (msb << 8) | lsb;
@@ -143,19 +133,30 @@ void readWav(){
 
 
 	int i = 0;
-	while (wavfile.read(buffer, 4)){
+	while (wavfile.read(buffer, 4)){	//TODO: work with both channels
 		dot[i] = (getnum(buffer[0], buffer[1]) + 32767) * 640 / 65536;
 		i++;
 	}
+	int* origDot = dot;
 	for (int i = 0; i < 90000; i++){
 		initHiLo(dot, height, &highdot[i], &lowdot[i]);	//Initialize wave drawing
+		highlight[i] = false;
 		dot += COMPRESSION;
 	}
-	int* prevAvg = new int[20];
-	for (int i = 20; i < 90000; i++){
-		detectBeat(prevAvg, &highlight[i], &highdot[i], &lowdot[i]);	//Writes the beats
-		dot += COMPRESSION;
+	BeatDetector* beatDetector = new BeatDetector();
+	dot = origDot;
+
+	bool beats[100000];
+	beatDetector->detectBeat(beats, dot);	//Writes the beats
+	cout << "END" << endl;
+	for (int i = 0; i < 4050; i++){
+		if (beats[i]){
+			for (int j = 0; j < 9; j++){
+				highlight[i * 20 + 5 + j] = true;
+			}
+		}
 	}
+	delete(beatDetector);
 }
 
 void playFile(){

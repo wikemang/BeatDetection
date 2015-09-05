@@ -189,7 +189,7 @@ FakesAssemblies/
 
 #Custom Ignore
 *.idb
-*log
+*log*
 *.lastbuildstate
 *.filters
 *.ilk

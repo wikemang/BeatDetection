@@ -152,6 +152,7 @@
     <ClCompile Include="Main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <Library Include="fft\libfftw3-3.lib" />
     <Library Include="FreeImage.lib" />
     <Library Include="rtAudio\lib\vs\dsound.lib" />
     <Library Include="rtAudio\lib\vs\rtAudio.lib" />
@@ -159,13 +160,15 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="constants.h" />
+    <ClInclude Include="fft\fftw3.h" />
     <ClInclude Include="FreeImage.h" />
     <ClInclude Include="rtAudio\include\RtAudio.h" />
     <ClInclude Include="rtAudio\include\RtError.h" />
     <ClInclude Include="SimpleBeatDetection.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="FreeImage.dll" />
+    <None Include="fft\libfftw3-3.def" />
+    <None Include="fft\libfftw3-3.exp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

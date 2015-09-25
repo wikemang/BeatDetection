@@ -5,22 +5,26 @@
 #include <math.h>
 
 using namespace std;
+const int buffSize = 15;
 
 class AvgBuffer{
-	__int64 energyBuff[45];	//Keep 1 sec as running average
-	__int64 amplitudeBuff[45];	//Keep 1 sec as running average
+	__int64 energyBuff[buffSize];	//Keep 1 sec as running average
+	__int64 amplitudeBuff[buffSize];	//Keep 1 sec as running average
 	int currentIndex;
 public:
 	AvgBuffer();
 	void insert(int value, __int64 energySum);
-	__int64 getAverageEnergy();
-	int getAverage();
-	float getVariance();
+	__int64 getEnergy();
+	int getAmplitude();
+	int getVariance();
 	float getSensitivityConstant();
+	float getSensitivityConstant2();
+
+	long getLastEnergy(int index);
 };
 
 AvgBuffer::AvgBuffer(){
-	for (int i = 0; i < 45; i++){
+	for (int i = 0; i < buffSize; i++){
 		energyBuff[i] = 0;
 		amplitudeBuff[i] = 0;
 	}
@@ -28,7 +32,7 @@ AvgBuffer::AvgBuffer(){
 }
 
 void AvgBuffer::insert(int amplitudeSum, __int64 energySum){
-	if (currentIndex == 44){
+	if (currentIndex == buffSize - 1){
 		currentIndex = -1;
 	}
 	currentIndex += 1;
@@ -37,33 +41,41 @@ void AvgBuffer::insert(int amplitudeSum, __int64 energySum){
 	energyBuff[currentIndex] = energySum;
 }
 
-__int64 AvgBuffer::getAverageEnergy(){
+__int64 AvgBuffer::getEnergy(){
 	__int64 total = 0;
-	for (int i = 0; i < 45; i++){
+	for (int i = 0; i < buffSize; i++){
 		total += energyBuff[i];
 	}
-	return total / 45;
+	return total / buffSize;
 }
 
-int AvgBuffer::getAverage(){
+int AvgBuffer::getAmplitude(){
 	int total = 0;
-	for (int i = 0; i < 45; i++){
+	for (int i = 0; i < buffSize; i++){
 		total += amplitudeBuff[i];
 	}
-	return total / 45;
+	return total / buffSize;
 }
 
-float AvgBuffer::getVariance(){
-	__int64 average = getAverage();
+int AvgBuffer::getVariance(){
+	__int64 average = getAmplitude();
 	__int64 total = 0;
-	for (int i = 0; i < 45; i++){
+	for (int i = 0; i < buffSize; i++){
 		total += (amplitudeBuff[i] - average) * (amplitudeBuff[i] - average);
 	}
-	return (float)total * 980 / 44100;
+	return total / buffSize;
 }
 
 float AvgBuffer::getSensitivityConstant(){
-	return (-0.0025714 * getVariance() + 1.5142857);
+	return (-0.00000000233 * getVariance() + 2);
+}
+
+float AvgBuffer::getSensitivityConstant2(){
+	return (-0.00000000233 * getVariance() + 1.7);
+}
+
+long AvgBuffer::getLastEnergy(int index){
+	return energyBuff[buffSize - index];
 }
 
 class BeatDetector{
@@ -74,6 +86,8 @@ public:
 	virtual void detectBeat(bool* highlight, int* dot);
 
 };
+
+int debug_test_max = 0;
 
 void BeatDetector::detectBeat(bool* beats, int dot[980]){
 	__int64 currentE;	//Current Energy total (A^2)
@@ -88,12 +102,24 @@ void BeatDetector::detectBeat(bool* beats, int dot[980]){
 			}
 			avgBuffer->insert(currentA, currentE);
 			beats[i + k * 45] = false;
-			if (currentE > 1.2* avgBuffer->getAverageEnergy()){
+			if (debug_test_max < avgBuffer->getVariance())
+				debug_test_max = avgBuffer->getVariance();
+			//cout << avgBuffer->getSensitivityConstant() << endl;
+			if (currentE > avgBuffer->getSensitivityConstant()* avgBuffer->getEnergy() ){
 				beats[i + k * 45] = true;
 			}
 			dot += 980;
 		}
 	}
+
+
+	for (int i = 4049; i > 4; i--){
+		if (beats[i]){
+			if (beats[i - 1] || beats[i - 2] || beats[i - 3] || beats[i - 4])
+				beats[i] = false;
+		}
+	}
+	cout << "max" << debug_test_max << endl;
 }
 
 BeatDetector::BeatDetector(){

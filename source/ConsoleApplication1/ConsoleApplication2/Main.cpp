@@ -7,11 +7,13 @@
 #include <thread> 
 #include "constants.h"
 #include "SimpleBeatDetection.h"
+#include "fft/fftw3.h"
 
 #include <dshow.h>
 #include <cstdio>
 
 using namespace std;
+bool finishedPlaying;
 
 
 void initColors(){
@@ -36,7 +38,7 @@ void initColors(){
 	red.rgbReserved = 125;
 }
 
-
+//Draws the waveform for 1 frame (screen's worth) of data.
 void drawWave(FIBITMAP *dib, int high[COMPRESSION], int low[COMPRESSION], int width, int height, bool highlight[COMPRESSION]){
 	for (unsigned x = 0; x < width; x++) {
 		for (unsigned y = 0; y < height; y++) {
@@ -48,7 +50,7 @@ void drawWave(FIBITMAP *dib, int high[COMPRESSION], int low[COMPRESSION], int wi
 			}
 		}
 		if (highlight[x] || highlight[x - 1] || highlight[x - 2]){
-			for (unsigned y = 250; y < 350; y++) {
+			for (unsigned y = 270; y < 350; y++) {
 				FreeImage_SetPixelColor(dib, x, y, &yellow);
 			}
 		}
@@ -61,6 +63,7 @@ void drawWave(FIBITMAP *dib, int high[COMPRESSION], int low[COMPRESSION], int wi
 	}
 }
 
+//Initialize 1 pixel of waveform data.
 void initHiLo(int dot[COMPRESSION], int height, int* high, int* low){
 	int lowest, highest;
 	lowest = DEFAULTLOW;
@@ -76,10 +79,10 @@ void initHiLo(int dot[COMPRESSION], int height, int* high, int* low){
 	*high = highest;
 	*low = lowest;
 }
-//Get numerical value of .wav word
+
+//Get numerical value of 2 bytes.
 short getnum(char lsb, char msb){
-	short num = (msb << 8) | lsb;
-	return num;
+	return (msb << 8) | (lsb & 255);
 }
 
 
@@ -87,16 +90,18 @@ short getnum(char lsb, char msb){
 
 // For IID_IGraphBuilder, IID_IMediaControl, IID_IMediaEvent
 #pragma comment(lib, "strmiids.lib")
-// Obviously change this to point to a valid mp3 file.
-const wchar_t* filePath = L"C:\\Program Files (x86)\\Stepmania 5\\Songs\\Test\\testsong\\6.wav";
 
+//const wchar_t* filePath = L"C:\\Program Files (x86)\\Stepmania 5\\Songs\\kpop\\sistar\\sistar.wav";
+const wchar_t* filePath = L"C:\\Users\\Mike\\Desktop\\ddr\\DDr\\paradisecut.wav";
 
 //TODO: change initialization to be based off compression and size of file.
-int* dot = new int[12000000];
-int* highdot = new int[100000];
-int* lowdot = new int[100000];
-bool* highlight = new bool[100000];
-FIBITMAP *dib = FreeImage_Load(FIF_PNG, "../../../asdf.png", PNG_DEFAULT);	//Default animation area
+int* dot = new int[16777216];	//2^24 likely upper bound. Can support files that are roughly 6.3 minutes and have a frequency of 44100.
+int* tempDot = new int[16777216];	//2^24
+
+int* highdot = new int[10000000];
+int* lowdot = new int[10000000];
+bool* highlight = new bool[10000000];
+FIBITMAP *dib = FreeImage_Load(FIF_PNG, "../../../template.png", PNG_DEFAULT);	//Default animation area
 int width = FreeImage_GetWidth(dib);
 int height = FreeImage_GetHeight(dib);
 HDC hDC = GetDC(NULL);
@@ -116,11 +121,17 @@ void drawFrame(){
 }
 
 void readWav(){
+	double* data = (double*)fftw_malloc(sizeof(double) * 16777216);
+	double* dataTemp = (double*)fftw_malloc(sizeof(double) * 16777216);
+	fftw_complex* dataF = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * 16777216);
 	initColors();
 	ifstream wavfile(filePath, ios::binary);
 	char buffer[4];
-	for (int j = 0; j < 22; j++){	//Wav header
-		wavfile.read(buffer, 2);
+	string header = "";
+	for (int j = 0; j < 11; j++){	//Wav header
+		wavfile.read(buffer, 4);
+		string buff(buffer, 4);
+		header += buff;
 	}
 
 
@@ -131,24 +142,109 @@ void readWav(){
 
 	SetStretchBltMode(hDC, COLORONCOLOR);
 
-
-	int i = 0;
+	for (int i = 0; i < 16777216; i++){
+		data[i] = 0;
+	}
+	
+	int dataCount = 0;
 	while (wavfile.read(buffer, 4)){	//TODO: work with both channels
-		dot[i] = (getnum(buffer[0], buffer[1]) + 32767) * 640 / 65536;
-		i++;
+		data[dataCount] = getnum(buffer[0], buffer[1]);
+
+		dot[dataCount] = (data[dataCount] + 32767) * 640 / 65536;
+
+		dataCount++;
 	}
 	int* origDot = dot;
-	for (int i = 0; i < 90000; i++){
+	
+	for (int i = 0; i < dataCount / COMPRESSION; i++){
 		initHiLo(dot, height, &highdot[i], &lowdot[i]);	//Initialize wave drawing
 		highlight[i] = false;
 		dot += COMPRESSION;
 	}
-	BeatDetector* beatDetector = new BeatDetector();
 	dot = origDot;
+	bool beats[4050];
+	bool tempBeats[4050];
+	for (int i = 0; i < 4050; i++){
+		beats[i] = false;
+		tempBeats[i] = false;
+	}
 
-	bool beats[100000];
-	beatDetector->detectBeat(beats, dot);	//Writes the beats
-	cout << "END" << endl;
+	fftw_plan fft = fftw_plan_dft_r2c_1d(dataCount, data, dataF, FFTW_ESTIMATE);
+	fftw_plan ifft = fftw_plan_dft_c2r_1d(dataCount, dataF, dataTemp, FFTW_ESTIMATE);
+	
+	const int totalBands = 6;
+	int freqBandStartIndex[totalBands + 1];
+
+	fftw_execute(fft);
+
+	_int64 total = 0;
+	for (int i = 0; i < dataCount / 2; i++){
+		total += (dataF[i][0] * dataF[i][0] + dataF[i][1] * dataF[i][1]) / 100000000;	//Avoid overflow
+	}
+	_int64 current = 0;
+	int i = 0;
+	for (int j = 0; j < totalBands; j++){
+		while (current < total * j / totalBands){
+			current += (dataF[i][0] * dataF[i][0] + dataF[i][1] * dataF[i][1]) / 100000000;
+			i++;
+		}
+		freqBandStartIndex[j] = i;
+	}
+	freqBandStartIndex[totalBands] = dataCount / 2;
+
+	for (int freqBand = 0; freqBand < totalBands; freqBand++){
+		cout << "Starting FFT #" << freqBand << "..." << endl;
+		fftw_execute(fft);
+
+		for (int i = 0; i < freqBandStartIndex[freqBand]; i++){
+			dataF[i][0] = 0;
+			dataF[i][1] = 0;
+		}
+		for (int i = freqBandStartIndex[freqBand + 1]; i < dataCount; i++){
+			dataF[i][0] = 0;
+			dataF[i][1] = 0;
+		}
+		cout << "Starting IFFT #" << freqBand << "..." << endl;
+		fftw_execute(ifft);
+
+
+		//Debug file writing
+		string fileName = "modified" + to_string(freqBand) + ".wav";
+		cout << "Writing File " << fileName << "..." << endl;
+		ofstream oFile(fileName, ios::out | ios::binary);
+		oFile.write(header.c_str(), 44);
+		__int16 char2;
+		for (int i = 0; i < dataCount; i++){
+			char2 = dataTemp[i] / dataCount;
+			char maxChar = 255;
+			oFile.put((char)(char2 % 256));
+			oFile.put((char)(char2 >> 8));
+
+			char2 = dataTemp[i] / dataCount;
+			oFile.put((char)(char2 % 256));
+			oFile.put((char)(char2 >> 8));
+
+			tempDot[i] = (char2 + 32767) * 640 / 65536;
+		}
+		oFile.close();
+
+		//First band tends to contain a lot of very low frequency sound that can't be heard, so we exclude it from beat detection.
+			BeatDetector* beatDetector = new BeatDetector();
+			beatDetector->detectBeat(tempBeats, tempDot);	//Writes the beats
+			for (int i = 0; i < 4050; i++){
+				beats[i] = beats[i] || tempBeats[i];
+			}
+
+			delete (beatDetector);
+	}
+
+	for (int i = 4049; i > 4; i--){
+		if (beats[i]){
+			if (beats[i - 1] || beats[i - 2] || beats[i - 3] || beats[i - 4])
+				beats[i] = false;
+		}
+	}
+
 	for (int i = 0; i < 4050; i++){
 		if (beats[i]){
 			for (int j = 0; j < 9; j++){
@@ -156,7 +252,17 @@ void readWav(){
 			}
 		}
 	}
-	delete(beatDetector);
+
+
+
+
+
+	fftw_destroy_plan(fft);
+	fftw_destroy_plan(ifft);
+	fftw_free(data);
+	fftw_free(dataF);
+
+	
 }
 
 void playFile(){
@@ -197,20 +303,20 @@ void playFile(){
 			long evCode;
 			while (true){
 				drawFrame();
-				//cout << "Time diff: " << timer2 - timer1 << "tTime: " << tTime << endl;
+				
 				if (timer2 - timer1 - tTime <= -20){
-					if (freq <= avgFreq + 1.5)
-						freq += 1;
+					if (eventTime <= avgFreq + 1)
+						eventTime += 1;
 				}
 				if (timer2 - timer1 - tTime >= 20){
-					if (freq >= avgFreq - 1.5)
-						freq -= 1;
+					if (eventTime >= avgFreq - 1)
+						eventTime -= 1;
 				}
-				avgFreq = (avgFreq * 39 + freq) / 40.0;
+				avgFreq = (avgFreq * 39 + eventTime) / 40.0;
+				//cout << eventTime << "\t" << -(timer2 - timer1 - tTime) << endl;
+				HRESULT res = pEvent->WaitForCompletion(eventTime, &evCode);	//Normal is 20 but the cpu has really unpredictable run times.
 				tTime += 50;
 				timer2 = clock();
-
-				HRESULT res = pEvent->WaitForCompletion(freq, &evCode);	//Normal is 20 but the cpu has really unpredictable run times.
 
 
 				if (res == VFW_E_WRONG_STATE)
@@ -225,15 +331,22 @@ void playFile(){
 	pControl->Release();
 	pGraph->Release();
 	::CoUninitialize();
+	finishedPlaying = true;
 }
 
 int main(){
+	
 	readWav();
+	cout << "Ready. Press enter to continue." << endl;
+	string temp;
+	cin >> temp;
+	//return 0;
 	thread first(playFile);
-	while (true){
-		Sleep(100);
+	finishedPlaying = false;
+	while (!finishedPlaying){
+		Sleep(1000);
 	}
-	cout << "end???" << endl;
+	cout << "end2???" << endl;
 
 
 	delete dot;
